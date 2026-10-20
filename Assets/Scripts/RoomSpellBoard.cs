@@ -10,17 +10,28 @@ namespace RoomSpell
 {
     public sealed class RoomSpellBoard : MonoBehaviour
     {
+        [Serializable]
+        public sealed class ObjectArtwork
+        {
+            public string Label;
+            public Sprite Image;
+        }
         public TMP_FontAsset Font;
         public Transform View;
+        [Tooltip("Optional illustrations keyed by detector label, e.g. cup or book. Camera frames are never saved as artwork.")]
+        public ObjectArtwork[] Artwork = Array.Empty<ObjectArtwork>();
         public Action ScanRequested, DemoRequested, MakeRequested, NextRequested, ClearRequested;
         public Action<string> ObjectSelected;
         public Action<int> ObjectRemoved, TileSelected;
-        readonly Color ink = new Color(0.94f, 0.96f, 0.92f);
-        readonly Color teal = new Color(0.06f, 0.30f, 0.31f);
-        readonly Color gold = new Color(1f, 0.67f, 0.25f);
+        readonly Color ink = new Color(.93f, .97f, 1f);
+        readonly Color mint = new Color(.42f, .94f, .82f);
+        readonly Color indigo = new Color(.36f, .40f, .83f);
+        readonly Color dark = new Color(.04f, .12f, .19f);
         readonly Button[] candidates = new Button[8];
         readonly Button[] selected = new Button[3];
         readonly Button[] tiles = new Button[8];
+        readonly Image[] artworkImages = new Image[3];
+        readonly GameObject[] placeholders = new GameObject[3];
         readonly string[] candidateLabels = new string[8];
         GameObject selectionPanel, puzzlePanel;
         TMP_Text status, clue, formedWord, puzzleObjects, mode;
@@ -29,60 +40,81 @@ namespace RoomSpell
         void Awake()
         {
             GetComponent<RectTransform>().sizeDelta = new Vector2(900, 740);
-            var background = gameObject.AddComponent<Image>();
-            background.color = new Color(0.025f, 0.10f, 0.12f, 0.97f);
-            background.raycastTarget = false;
-            Label(transform, "ROOMSPELL", 24, 20, 550, 50, 42, gold);
-            mode = Label(transform, "CAMERA OFF", 584, 32, 292, 35, 22, gold);
-            Label(transform, "Turn your surroundings into a word puzzle", 24, 77, 840, 42, 26, ink);
-            status = Label(transform, "Scan your room and choose three related objects.", 24, 132, 840, 62, 25, ink);
-            CreateButton(transform, "Scan room", 24, 211, 267, 58, () => ScanRequested?.Invoke());
-            var demo = CreateButton(transform, "Dummy scenarios", 310, 211, 267, 58, () => DemoRequested?.Invoke());
+            Surface(transform, "Backdrop", 0, 0, 900, 740, 42,
+                new Color(.035f, .13f, .17f, .86f), new Color(.09f, .09f, .23f, .86f));
+            Surface(transform, "Accent", 36, 22, 828, 5, 2, mint, indigo);
+            Label(transform, "RoomSpell", 36, 40, 500, 48, 38, ink);
+            mode = Label(transform, "CAMERA OFF", 594, 49, 270, 34, 21, mint);
+            mode.alignment = TextAlignmentOptions.Right;
+            status = Label(transform, "Find three things that belong together.", 36, 98, 828, 58, 26, ink);
+            status.overflowMode = TextOverflowModes.Overflow;
+            CreateButton(transform, "Scan", 36, 176, 270, 56, () => ScanRequested?.Invoke(), true);
+            CreateButton(transform, "Recenter", 324, 176, 270, 56, PlaceInFront);
+            var demo = CreateButton(transform, "Try demo", 612, 176, 252, 56, () => DemoRequested?.Invoke());
 #if !UNITY_EDITOR && !DEVELOPMENT_BUILD
             demo.gameObject.SetActive(false);
 #endif
-            CreateButton(transform, "Recenter board", 596, 211, 280, 58, PlaceInFront);
-
             selectionPanel = Panel("Choose objects");
-            Label(selectionPanel.transform, "CHOOSE 3 OBJECTS", 24, 287, 840, 40, 24, gold);
-            for (var i = 0; i < candidates.Length; i++)
-            {
-                var index = i;
-                candidates[i] = CreateButton(selectionPanel.transform, "Look around", 24 + (i % 4) * 215,
-                    339 + (i / 4) * 65, 200, 55, () => ObjectSelected?.Invoke(candidateLabels[index]));
-                candidates[i].interactable = false;
-            }
-            CreateButton(selectionPanel.transform, "Add pen (manual)", 24, 477, 410, 55, () => ObjectSelected?.Invoke("pen"));
-            CreateButton(selectionPanel.transform, "Add notebook (manual)", 452, 477, 424, 55, () => ObjectSelected?.Invoke("notebook"));
+            Label(selectionPanel.transform, "YOUR THREE OBJECTS", 36, 256, 800, 30, 20, mint);
             for (var i = 0; i < selected.Length; i++)
             {
                 var index = i;
-                selected[i] = CreateButton(selectionPanel.transform, "Empty", 24 + i * 288, 552, 274, 55,
-                    () => ObjectRemoved?.Invoke(index));
+                selected[i] = CreateButton(selectionPanel.transform, "Object " + (i + 1),
+                    36 + i * 282, 300, 264, 128, () => ObjectRemoved?.Invoke(index));
+                var label = selected[i].GetComponentInChildren<TMP_Text>();
+                label.rectTransform.anchoredPosition = new Vector2(16, -88);
+                label.rectTransform.sizeDelta = new Vector2(232, 32);
+                label.fontSize = 24;
+                var art = new GameObject("Object artwork", typeof(RectTransform), typeof(Image));
+                Rectangle(art, selected[i].transform, 100, 14, 64, 64);
+                artworkImages[i] = art.GetComponent<Image>();
+                artworkImages[i].preserveAspect = true;
+                artworkImages[i].raycastTarget = false;
+                artworkImages[i].enabled = false;
+                placeholders[i] = new GameObject("Placeholder art", typeof(RectTransform));
+                Rectangle(placeholders[i], selected[i].transform, 100, 14, 64, 64);
+                var parent = placeholders[i].transform;
+                Surface(parent, "Halo", 0, 0, 64, 64, 32, new Color(.23f, .45f, .53f, .7f), indigo);
+                Surface(parent, "Spark vertical", 28, 10, 8, 44, 4, mint, ink);
+                Surface(parent, "Spark horizontal", 10, 28, 44, 8, 4, ink, mint);
+                Surface(parent, "Spark center", 23, 23, 18, 18, 9, ink, ink);
                 selected[i].interactable = false;
             }
-            make = CreateButton(selectionPanel.transform, "Make my puzzle", 24, 631, 852, 64, () => MakeRequested?.Invoke());
+            for (var i = 0; i < candidates.Length; i++)
+            {
+                var index = i;
+                candidates[i] = CreateButton(selectionPanel.transform, "",
+                    36 + i % 4 * 211, 452 + i / 4 * 60, 195, 50,
+                    () => ObjectSelected?.Invoke(candidateLabels[index]));
+                candidates[i].gameObject.SetActive(false);
+            }
+            CreateButton(selectionPanel.transform, "+ Pen (manual)", 36, 582, 405, 48, () => ObjectSelected?.Invoke("pen"));
+            CreateButton(selectionPanel.transform, "+ Notebook (manual)", 459, 582, 405, 48, () => ObjectSelected?.Invoke("notebook"));
+            make = CreateButton(selectionPanel.transform, "Play", 36, 656, 828, 58, () => MakeRequested?.Invoke(), true);
             make.interactable = false;
-
             puzzlePanel = Panel("Solve word");
-            clue = Label(puzzlePanel.transform, "", 24, 297, 852, 90, 30, ink);
-            formedWord = Label(puzzlePanel.transform, "", 24, 400, 852, 68, 48, gold);
+            clue = Label(puzzlePanel.transform, "", 48, 282, 804, 96, 32, ink);
+            clue.alignment = TextAlignmentOptions.Center;
+            Surface(puzzlePanel.transform, "Word tray", 36, 398, 828, 82, 24,
+                new Color(.08f, .24f, .28f, .92f), new Color(.17f, .19f, .39f, .92f));
+            formedWord = Label(puzzlePanel.transform, "", 48, 405, 804, 68, 46, mint);
             formedWord.alignment = TextAlignmentOptions.Center;
             for (var i = 0; i < tiles.Length; i++)
             {
                 var index = i;
-                tiles[i] = CreateButton(puzzlePanel.transform, "", 24 + i * 108, 484, 96, 76, () => TileSelected?.Invoke(index));
+                tiles[i] = CreateButton(puzzlePanel.transform, "", 36 + i * 105, 510, 93, 76, () => TileSelected?.Invoke(index), true);
                 tiles[i].GetComponentInChildren<TMP_Text>().fontSize = 36;
             }
-            clear = CreateButton(puzzlePanel.transform, "Clear letters", 24, 589, 410, 60, () => ClearRequested?.Invoke());
-            next = CreateButton(puzzlePanel.transform, "Another word", 452, 589, 424, 60, () => NextRequested?.Invoke());
-            puzzleObjects = Label(puzzlePanel.transform, "", 24, 674, 852, 40, 23, ink);
+            clear = CreateButton(puzzlePanel.transform, "Retry", 36, 616, 405, 58, () => ClearRequested?.Invoke());
+            next = CreateButton(puzzlePanel.transform, "Next word", 459, 616, 405, 58, () => NextRequested?.Invoke(), true);
+            puzzleObjects = Label(puzzlePanel.transform, "", 36, 690, 828, 30, 21, ink);
+            puzzleObjects.alignment = TextAlignmentOptions.Center;
             puzzlePanel.SetActive(false);
         }
 
         IEnumerator Start()
         {
-            yield return new WaitForSecondsRealtime(0.7f);
+            yield return new WaitForSecondsRealtime(.7f);
             PlaceInFront();
         }
 
@@ -90,8 +122,8 @@ namespace RoomSpell
         {
             if (!View) return;
             var forward = Vector3.ProjectOnPlane(View.forward, Vector3.up).normalized;
-            if (forward.sqrMagnitude < 0.1f) forward = Vector3.forward;
-            transform.SetPositionAndRotation(View.position + forward * 1.4f - Vector3.up * 0.08f,
+            if (forward.sqrMagnitude < .1f) forward = Vector3.forward;
+            transform.SetPositionAndRotation(View.position + forward * 1.4f - Vector3.up * .08f,
                 Quaternion.LookRotation(forward, Vector3.up));
         }
 
@@ -100,13 +132,22 @@ namespace RoomSpell
 
         public void ShowCandidates(ObjectObservation[] observations)
         {
+            // Keep a pointing target in its slot when inference confidence changes.
+            for (var i = 0; i < candidateLabels.Length; i++)
+                if (!observations.Any(x => x.Label == candidateLabels[i])) candidateLabels[i] = null;
+            foreach (var observation in observations)
+            {
+                if (candidateLabels.Contains(observation.Label)) continue;
+                var empty = Array.IndexOf(candidateLabels, null);
+                if (empty < 0) break;
+                candidateLabels[empty] = observation.Label;
+            }
             for (var i = 0; i < candidates.Length; i++)
             {
-                var exists = i < observations.Length;
-                candidateLabels[i] = exists ? observations[i].Label : null;
+                var exists = candidateLabels[i] != null;
+                candidates[i].gameObject.SetActive(exists);
                 candidates[i].interactable = exists;
-                candidates[i].GetComponentInChildren<TMP_Text>().text = exists
-                    ? $"{observations[i].Label}  {observations[i].Confidence:P0}" : "—";
+                candidates[i].GetComponentInChildren<TMP_Text>().text = candidateLabels[i] ?? "";
             }
         }
 
@@ -116,8 +157,14 @@ namespace RoomSpell
             puzzlePanel.SetActive(false);
             for (var i = 0; i < selected.Length; i++)
             {
-                selected[i].interactable = i < labels.Count;
-                selected[i].GetComponentInChildren<TMP_Text>().text = i < labels.Count ? labels[i] + " ×" : "Empty";
+                var exists = i < labels.Count;
+                selected[i].interactable = exists;
+                selected[i].GetComponentInChildren<TMP_Text>().text = exists ? labels[i] + "  ×" : "Object " + (i + 1);
+                var sprite = exists ? Artwork?.FirstOrDefault(x => x != null &&
+                    string.Equals(x.Label, labels[i], StringComparison.OrdinalIgnoreCase))?.Image : null;
+                artworkImages[i].sprite = sprite;
+                artworkImages[i].enabled = sprite != null;
+                placeholders[i].SetActive(sprite == null);
             }
             make.interactable = labels.Count == 3;
         }
@@ -126,13 +173,15 @@ namespace RoomSpell
         {
             selectionPanel.SetActive(false);
             puzzlePanel.SetActive(true);
-            clue.text = "CLUE  " + round.Clue;
+            clue.text = round.Clue;
             formedWord.text = string.Join(" ", round.FormedWord.ToCharArray());
-            puzzleObjects.text = "Inspired by " + string.Join(" + ", round.Objects.Select(x => x.ToLowerInvariant()));
+            puzzleObjects.text = string.Join("  ·  ", round.Objects.Select(x => x.ToLowerInvariant()));
+            var left = (900 - (round.Tiles.Length * 105 - 12)) * .5f;
             for (var i = 0; i < tiles.Length; i++)
             {
                 tiles[i].gameObject.SetActive(i < round.Tiles.Length);
                 if (i >= round.Tiles.Length) continue;
+                tiles[i].GetComponent<RectTransform>().anchoredPosition = new Vector2(left + i * 105, -510);
                 tiles[i].GetComponentInChildren<TMP_Text>().text = round.Tiles[i].ToString();
                 tiles[i].interactable = !used[i] && !round.IsFull;
             }
@@ -162,6 +211,19 @@ namespace RoomSpell
             return rect;
         }
 
+        RoomSpellSurface Surface(Transform parent, string name, float x, float y, float width, float height,
+            float radius, Color left, Color right)
+        {
+            var child = new GameObject(name, typeof(RectTransform), typeof(RoomSpellSurface));
+            Rectangle(child, parent, x, y, width, height);
+            var graphic = child.GetComponent<RoomSpellSurface>();
+            graphic.Radius = radius;
+            graphic.Left = left;
+            graphic.Right = right;
+            graphic.raycastTarget = false;
+            return graphic;
+        }
+
         TMP_Text Label(Transform parent, string text, float x, float y, float width, float height, float size, Color color)
         {
             var child = new GameObject("Label", typeof(RectTransform), typeof(TextMeshProUGUI));
@@ -176,22 +238,23 @@ namespace RoomSpell
             return label;
         }
 
-        Button CreateButton(Transform parent, string text, float x, float y, float width, float height, Action click)
+        Button CreateButton(Transform parent, string text, float x, float y, float width, float height, Action click, bool primary = false)
         {
-            var child = new GameObject(text, typeof(RectTransform), typeof(Image), typeof(Button));
-            Rectangle(child, parent, x, y, width, height);
-            var image = child.GetComponent<Image>();
-            image.color = teal;
-            var button = child.GetComponent<Button>();
+            var image = Surface(parent, text, x, y, width, height, 18,
+                primary ? mint : new Color(.10f, .24f, .29f, .94f),
+                primary ? new Color(.49f, .78f, .94f) : new Color(.20f, .22f, .40f, .94f));
+            image.raycastTarget = true;
+            var button = image.gameObject.AddComponent<Button>();
             button.targetGraphic = image;
             var colors = button.colors;
-            colors.highlightedColor = new Color(1.3f, 1.3f, 1.3f);
+            colors.highlightedColor = new Color(1.2f, 1.2f, 1.2f);
             colors.selectedColor = colors.highlightedColor;
-            colors.disabledColor = new Color(0.5f, 0.5f, 0.5f, 0.6f);
+            colors.pressedColor = new Color(.7f, .9f, .9f);
+            colors.disabledColor = new Color(.65f, .7f, .8f, .65f);
             button.colors = colors;
             button.navigation = new Navigation { mode = Navigation.Mode.None };
             button.onClick.AddListener(() => click());
-            var label = Label(child.transform, text, 8, 0, width - 16, height, 25, ink);
+            var label = Label(image.transform, text, 8, 0, width - 16, height, 25, primary ? dark : ink);
             label.alignment = TextAlignmentOptions.Center;
             return button;
         }

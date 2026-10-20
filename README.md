@@ -6,9 +6,15 @@ A Quest 3 / Quest 3S mixed reality word game. Look at your surroundings, select 
 
 Open the project in **Unity 6000.3.19f1** and open `Assets/Scenes/RoomSpell.unity`.
 
-On Quest, point a controller ray at a button and press the trigger, or use the Meta hand interactions. Tap **Scan room**, allow the camera permission, and look steadily at related objects. Tap three detected object buttons, then **Make my puzzle**. Tap letters in order. **Clear letters** retries an incorrect answer; **Another word** becomes available after solving. **Recenter board** moves the board in front of you.
+On Quest, point a controller ray at a button and press the trigger, or set the controllers aside and use the Meta hand ray/pinch or near-touch interactions. Tap **Scan**, allow the camera permission, and look steadily at related objects. Tap three detected object buttons, then **Play**. Tap letters in order. **Retry** clears your answer; **Next word** becomes available after solving. **Recenter** moves the board in front of you.
 
-In the Editor without a headset, mouse input and **Dummy scenarios** let you play the complete puzzle loop. The button cycles through study (cup, pen, notebook), kitchen (cup, bowl, spoon) and an unrelated set. Each supplies two batches through the same confirmation filter used by the detector. **DUMMY DATA** stays visible and does not claim neural recognition. Dummy input is compiled only in the Editor and development builds.
+In the Editor without a headset, mouse input and **Try demo** let you play the complete puzzle loop. The button cycles through study (cup, pen, notebook), kitchen (cup, bowl, spoon) and an unrelated set. Each supplies two batches through the same confirmation filter used by the detector. **DUMMY DATA** stays visible and does not claim neural recognition. Dummy input is compiled only in the Editor and development builds.
+
+## Spatial UI and custom artwork
+
+The rounded translucent board uses a teal-to-indigo accent and stays at its placed room position until **Recenter** is pressed. It does not follow the head or hands. This is session-local placement, not a persistent spatial anchor across launches. Detected labels keep their button slots when confidence order changes, making targets easier to point at.
+
+To replace the three placeholder illustrations, import your images as **Sprite (2D and UI)**. Select the scene object with the **RoomSpellBoard** component and add entries to its **Artwork** array: set **Label** to an object name such as `cup` or `book`, and assign **Image**. Labels match without case sensitivity; missing entries use the built-in placeholder. Save the scene and rebuild. Images preserve their aspect ratio. Camera frames are never used as artwork.
 
 ## Run XR Simulator from the terminal
 
@@ -54,6 +60,14 @@ Cup + pen + notebook can produce STUDY, LEARN, FOCUS and CREATE. Other supported
 ## Checks and rebuilds
 
 Run `dotnet run --project Tests/PuzzleRoundChecks.csproj` for the puzzle, word-bank and detection-filter checks.
+
+With this project's Editor in Play mode, run the UI integration self-check:
+
+```powershell
+unity command eval --code 'return RoomSpellUIValidation.Run();' --caller plugin --skill unity-cli --project-path (Get-Location).Path --format json
+```
+
+This exercises stable detection slots, removal of missing objects, rendered rounded geometry, three artwork slots, room placement, button dimensions, and solve/retry/next behavior. It changes the current Play-mode round to demo data. It does not simulate physical fingers; test pinch and near-touch on the headset separately.
 
 The editor verification entry point is `RoomSpellVerification.Run`. It checks scene wiring, runs the real neural model on an image fixture, and plays through a puzzle before verifying that the next answer is different. Reports are written to `Validation/`, with a rendered board image at `Preview.png`.
 

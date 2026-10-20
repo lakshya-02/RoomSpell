@@ -58,8 +58,7 @@ namespace RoomSpell
         void OnCandidates(ObjectObservation[] observations)
         {
             Board.ShowCandidates(observations);
-            Board.SetStatus(observations.Length == 0 ? "Looking for related objects. Hold your view steady." :
-                "Tap three related objects to create a word puzzle.");
+            Board.SetStatus(observations.Length == 0 ? "Looking… hold your view steady." : "Pick three related objects.");
         }
 
         void Demo()
@@ -78,7 +77,7 @@ namespace RoomSpell
             Board.SetMode("DUMMY DATA");
             Board.ShowCandidates(Array.Empty<ObjectObservation>());
             Board.ShowSelection(selected);
-            Board.SetStatus("DUMMY DATA: " + string.Join(" + ", DummyScenarios.Labels(scenario)) + ". Tap Dummy again for the next scenario.");
+            Board.SetStatus("Demo objects. Tap Try demo to switch.");
             Detection.StartDummy(scenario);
         }
 #endif
@@ -88,14 +87,14 @@ namespace RoomSpell
             if (string.IsNullOrEmpty(label) || selected.Contains(label)) return;
             if (selected.Count == 3)
             {
-                Board.SetStatus("Three objects selected. Tap a selected object to remove it.");
+                Board.SetStatus("Three selected. Tap one to replace it.");
                 return;
             }
             selected.Add(label);
             Board.ShowSelection(selected);
             Board.SetStatus(label == "pen" || label == "notebook"
-                ? $"{label} added manually. Selected {selected.Count}/3."
-                : $"Selected {selected.Count}/3. Choose objects with a shared purpose.");
+                ? $"{label} added manually · {selected.Count}/3"
+                : $"{selected.Count}/3 selected");
         }
 
         void RemoveObject(int index)
@@ -109,7 +108,7 @@ namespace RoomSpell
         {
             if (!WordCatalog.TryNext(selected, usedAnswers, Environment.TickCount, out var nextRound))
             {
-                Board.SetStatus("No new shared word for this set. Scan again and choose three linked objects.");
+                Board.SetStatus("No new word for this set. Try other objects.");
                 return;
             }
             Detection.StopScanning();
@@ -117,7 +116,7 @@ namespace RoomSpell
             usedTiles = new bool[round.Tiles.Length];
             nextSlot = 0;
             Board.ShowRound(round, usedTiles);
-            Board.SetStatus("Use the clue and tap the letters in order to make a new word.");
+            Board.SetStatus("Use the clue. Tap letters in order.");
         }
 
         void PlaceTile(int index)
@@ -130,9 +129,9 @@ namespace RoomSpell
             {
                 usedAnswers.Add(round.Answer);
                 score += 100;
-                Board.SetStatus($"Solved! {round.Answer}  ·  Score {score}. Try another word from the same objects.");
+                Board.SetStatus($"Solved! {round.Answer} · {score} points");
             }
-            else if (round.IsFull) Board.SetStatus("That order does not match the clue. Clear the letters and try again.");
+            else if (round.IsFull) Board.SetStatus("Not quite. Tap Retry.");
             Board.ShowRound(round, usedTiles);
         }
 
@@ -143,7 +142,7 @@ namespace RoomSpell
             Array.Clear(usedTiles, 0, usedTiles.Length);
             nextSlot = 0;
             Board.ShowRound(round, usedTiles);
-            Board.SetStatus("Try another order. Use the clue above the letters.");
+            Board.SetStatus("Try another order.");
         }
 
         void OnDestroy()
